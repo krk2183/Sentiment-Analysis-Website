@@ -1,43 +1,49 @@
-# --- 1. IMPORTS AND GLOBAL SETUP ---
+# --- 1. IMPORTS  ---
 import re, os, torch
 from flask_cors import CORS
 import torch.nn as nn
-from flask import Flask, request, jsonify, send_file # Import send_file for serving HTML
-import json # Import json for loading vocab.json
+from flask import Flask, request, jsonify, send_file 
+import json 
 
-# INITIALIZE THE FLASK APP
+# Change these lines in case you have renamed the files
+vocab_file_name = 'vocab.json'
+model_file_name = 'new-model.pt'
+
+# Some tunable parameters
+threshold = 0.5
+PAD_TO = 50
+
+# INITIALIZE THE APP
 app = Flask(__name__)
-CORS(app) # Enable Cross-Origin Resource Sharing
+CORS(app) # Cross-Origin Resource Sharing aka. CORS
 
 # --- 2. NBOW MODEL DEFINITION ---
-# This is your NBow model class. It MUST exactly match the one that created 'new-model.pt'
 class NBow(nn.Module):
     def __init__(self, vocab_size, embedding_dim, output_dim, pad_index):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=pad_index)
         self.fc = nn.Linear(embedding_dim, output_dim)
-        self.sigmoid = nn.Sigmoid() # Add sigmoid for binary classification
+        self.sigmoid = nn.Sigmoid() # sigmoid can be used for binary classification
 
     def forward(self, ids):
-        # ids: [batch_size, seq_len]
-        embedded = self.embedding(ids) # embedded: [batch_size, seq_len, embedding_dim]
-        pooled = embedded.mean(dim=1) # pooled: [batch_size, embedding_dim] (average across sequence length)
-        prediction = self.fc(pooled) # prediction: [batch_size, output_dim]
+        embedded = self.embedding(ids) # this line embeds batch_size, seq_len and embedding_dim
+        pooled = embedded.mean(dim=1) # this one pools: batch_size and embedding_dim 
+        prediction = self.fc(pooled) # the last prediction layer. Returns the previous parameters and layers' outputs
         return self.sigmoid(prediction)
 
 # --- 3. HELPER FUNCTIONS AND GLOBAL VARIABLES ---
 
-# Custom tokenizer function (simple whitespace and punctuation cleaning)
+# As said torchtext is problematic so I have defined a custom tokenizer that is simple and just as quick if not quicker
 def my_tokenizer(text):
     text = text.lower()
-    # Regex to keep only lowercase letters, numbers, spaces, and apostrophes
+    # Only keep lowercase letters alongside numbers that have spaces and apostrophes
     text = re.sub(r"[^a-z0-9 ']", "", text)
     tokens = text.split()
     return tokens
 
-# Function to load the vocabulary from the JSON file
+# Load the vocab.json file 
 def load_vocab():
-    vocab_path = os.path.join(os.path.dirname(__file__), "vocab.json")
+    vocab_path = os.path.join(os.path.dirname(__file__), vocab_file_name)
     if not os.path.exists(vocab_path):
         raise FileNotFoundError(f"vocab.json not found at {vocab_path}. Please ensure it exists.")
     with open(vocab_path, "r") as f:
@@ -58,7 +64,7 @@ try:
     MODEL = NBow(VOCAB_SIZE, EMBEDDING_DIM, OUTPUT_DIM, PAD_INDEX).to(DEVICE)
     
     # Load the model state dictionary from 'new-model.pt'
-    model_path = os.path.join(os.path.dirname(__file__), "new-model.pt")
+    model_path = os.path.join(os.path.dirname(__file__), model_file_name)
     if not os.path.exists(model_path):
         # This warning should ideally not be hit if build_sentiment_model.py is run first
         print(f"Warning: {model_path} not found. Creating a dummy model file.")
@@ -104,32 +110,29 @@ def predict_sentiment_route():
         # This is CRUCIAL for nn.Embedding which expects fixed-size inputs.
         # Choose a reasonable MAX_SEQ_LEN based on your expected input text length.
         # This value MUST be consistent between training (if you had it) and inference.
-        MAX_SEQ_LEN = 50 # Example: pad to 50 tokens. Adjust as needed for longer sentences.
+        MAX_SEQ_LEN = PAD_TO # Example: pad to 50 tokens. Adjust as needed for longer sentences.
         if len(ids) < MAX_SEQ_LEN:
             ids.extend([PAD_INDEX] * (MAX_SEQ_LEN - len(ids)))
         else:
             ids = ids[:MAX_SEQ_LEN] # Truncate if too long
 
-        # Convert list of IDs to a PyTorch tensor of type LongTensor
-        # Add batch dimension: [1, MAX_SEQ_LEN]
         input_tensor = torch.LongTensor(ids).unsqueeze(dim=0).to(DEVICE) 
 
         # Make the prediction
-        with torch.no_grad(): # Disable gradient calculation for inference
+        with torch.no_grad(): 
             prediction = MODEL(input_tensor).squeeze(dim=0)
         
-        # For binary classification with sigmoid, the output is a single probability score
         prediction_value = prediction.item()
         
-        # Classify based on a threshold (e.g., 0.5)
-        sentiment = "Positive" if prediction_value > 0.5 else "Negative"
+        # The result is declared in here with threshold 0.5 (in the hyperparameters section)
+        sentiment = "Positive" if prediction_value > threshold else "Negative"
 
         return jsonify({
             'sentiment_score': prediction_value,
             'sentiment': sentiment
         })
     except Exception as e:
-        # Print the full traceback for debugging
+        # Print the full traceback for easier debugging
         import traceback
         traceback.print_exc() 
         print(f"Error during prediction: {e}")

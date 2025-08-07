@@ -53,13 +53,13 @@
             const errorContainer = document.getElementById('error-container');
             const errorText = document.getElementById('error-text');
 
-            // Clear previous results and errors
+            // Clear previous outputs
             resultContainer.classList.add('hidden');
             errorContainer.classList.add('hidden');
             sentimentText.textContent = '';
             
             try {
-                // The URL of our Python Flask server - CORRECTED TO PORT 5000 AND SENTIMENT ENDPOINT
+                // WRONG PORT ISSUE FIXED
                 const apiUrl = 'http://127.0.0.1:5000/predict_sentiment'; 
 
                 const response = await fetch(apiUrl, {
@@ -67,7 +67,7 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ text: textInput }), // Ensure 'text' key matches Flask
+                    body: JSON.stringify({ text: textInput }),
                 });
 
                 if (!response.ok) {
@@ -78,7 +78,6 @@
                 const data = await response.json();
                 sentimentText.textContent = data.sentiment;
                 
-                // Add color based on sentiment
                 if (data.sentiment === "Positive") {
                     sentimentText.classList.remove("sentiment-negative");
                     sentimentText.classList.add("sentiment-positive");
@@ -90,7 +89,7 @@
                 resultContainer.classList.remove('hidden');
 
             } catch (error) {
-                console.error('Prediction failed:', error); // Log full error to console
+                console.error('Prediction failed:', error); // Log error to console for easier debugging
                 errorOutputElement.innerText = `Error: ${error.message}`;
                 errorContainer.classList.remove('hidden');
             }
