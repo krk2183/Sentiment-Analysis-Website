@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .sentiment-positive {
+            color: #10B981; /* Green-500 */
+        }
+        .sentiment-negative {
+            color: #EF4444; /* Red-500 */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md mx-auto transform transition-all duration-300 hover:scale-105">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Sentiment Analyzer</h1>
+        <form id="sentiment-form" class="space-y-6">
+            <div>
+                <label for="text-input" class="block text-sm font-medium text-gray-700 mb-2">Enter your text:</label>
+                <textarea id="text-input" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" placeholder="e.g., 'I love this product, it's fantastic!'" required></textarea>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors transform hover:scale-105">
+                Analyze Sentiment
+            </button>
+        </form>
+        
+        <div id="result-container" class="mt-8 p-6 bg-gray-100 rounded-lg text-center shadow-inner hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">Predicted Sentiment:</h2>
+            <p class="text-4xl font-extrabold" id="sentiment-text"></p>
+        </div>
+        
+        <div id="error-container" class="mt-4 p-4 bg-red-100 text-red-700 rounded-lg hidden">
+            <p id="error-text"></p>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        document.getElementById('sentiment-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const textInput = document.getElementById('text-input').value;
+            const resultContainer = document.getElementById('result-container');
+            const sentimentText = document.getElementById('sentiment-text');
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+
+            // Clear previous results and errors
+            resultContainer.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            sentimentText.textContent = '';
+            
+            try {
+                // The URL of our Python Flask server - CORRECTED TO PORT 5000 AND SENTIMENT ENDPOINT
+                const apiUrl = 'http://127.0.0.1:5000/predict_sentiment'; 
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: textInput }), // Ensure 'text' key matches Flask
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                sentimentText.textContent = data.sentiment;
+                
+                // Add color based on sentiment
+                if (data.sentiment === "Positive") {
+                    sentimentText.classList.remove("sentiment-negative");
+                    sentimentText.classList.add("sentiment-positive");
+                } else {
+                    sentimentText.classList.remove("sentiment-positive");
+                    sentimentText.classList.add("sentiment-negative");
+                }
+                
+                resultContainer.classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Prediction failed:', error); // Log full error to console
+                errorOutputElement.innerText = `Error: ${error.message}`;
+                errorContainer.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
